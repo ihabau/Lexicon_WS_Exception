@@ -1,7 +1,79 @@
 ![Lexicon Logo](https://lexicongruppen.se/media/wi5hphtd/lexicon-logo.svg)
 
-# Workshop Training
+# Workshop: Bank Account Manager
 
-This branch contains a single workshop exercise for practicing Java exception handling, file I/O, and the MVC design pattern.
+## Class Diagram
 
-See the workshop file in this repository for instructions.
+```mermaid
+classDiagram
+    namespace model {
+        class Account {
+            -String ownerName
+            -String accountNumber
+            -double balance
+            +Account(String ownerName, String accountNumber, double balance)
+        }
+    }
+
+    namespace data {
+        class AccountDAO {
+            <<interface>>
+            +findAll() List~Account~
+            +save(Account account) void
+            +findByAccountNumber(String accountNumber) Account
+        }
+        class FileAccountDAOImpl {
+            -Path filePath
+        }
+    }
+
+    namespace view {
+        class AccountView {
+            +getUserInput(String prompt) String
+            +displayMenu() void
+            +displayAccounts(List~Account~ accounts) void
+            +displayMessage(String message) void
+            +displayError(String message) void
+        }
+    }
+
+    namespace controller {
+        class AccountController {
+            -AccountDAO accountDAO
+            -AccountView accountView
+            +run() void
+        }
+    }
+
+    namespace exception {
+        class AccountStorageException { }
+        class DuplicateAccountException { }
+        class InsufficientFundsException { }
+        class ExceptionHandler {
+            +handle(Exception e)$ void
+        }
+    }
+
+    AccountDAO <|.. FileAccountDAOImpl
+    AccountController --> AccountDAO : uses
+    AccountController --> AccountView : updates
+    AccountController ..> ExceptionHandler : delegates errors
+
+    AccountDAO ..> Account : manages
+    FileAccountDAOImpl ..> Account : persists
+
+    Account ..> IllegalArgumentException : throws
+    Account ..> InsufficientFundsException : throws
+    FileAccountDAOImpl ..> AccountStorageException : throws
+    FileAccountDAOImpl ..> DuplicateAccountException : throws
+```
+
+## Checklist
+
+- [x] Task 1: Create the `Account` class in the `model` package with validation (ownerName, balance, accountNumber)
+- [x] Task 2: Define `AccountStorageException`, `DuplicateAccountException`, and `InsufficientFundsException` in the `exception` package
+- [x] Task 3: Implement `AccountDAO` and `FileAccountDAOImpl` in the `data` package
+- [x] Task 4: Create the `AccountView` and `AccountController` following the MVC pattern
+- [x] Task 5: Explain the MVC design pattern
+
+See [Workshop_9_Bank_Account.md](Workshop_9_Bank_Account.md) for full instructions.
