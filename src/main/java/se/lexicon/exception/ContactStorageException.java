@@ -2,8 +2,8 @@ package se.lexicon.exception;
 
 import java.io.IOException;
 
-public class ContactStorageException extends RuntimeException {
+public class ContactStorageException extends Exception {
     public ContactStorageException(String message, IOException e) {
-        super(message);
+        super(message, e);
     }
 }

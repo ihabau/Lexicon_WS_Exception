@@ -4,6 +4,20 @@
 
 > Checklist of topics to cover in the README, based on `Exception_Preseentation.md` and `Exception_Workshop.md`.
 
+## MVC Design
+MVC stands for Model, View and Controller.
+- **Model** (`Contact`)
+    The core data structure and business rules. It defines what the data looks like
+    and validates it (e.g. name not blank, phone must be 10 digits). It knows nothing
+    about files, UI, or how it's stored.
+- **View** (`ContactView`)
+    The interface the user interacts with. Handles all input (Scanner) and output
+    (System.out). It knows nothing about business logic or file storage.
+- **Controller** (`ContactController`)
+    The coordinator between Model and View. It reads user input from the View,
+    calls the right DAO method, catches exceptions, and tells the View what to
+    display. It contains the try-catch loop and is the only layer that decides
+    what to do with errors.
 
 ## Project Overview
 - [x] Project title and short description
@@ -12,20 +26,20 @@
 - [x] Link to [`Exception_Workshop.md`](Exception_Workshop.md) (hands-on tasks)
 
 ## Theory Topics (from the Presentation)
-- [ ] Introduction to exceptions (what, why, advantages)
-- [ ] Types of exceptions: Checked, Unchecked, Errors
-- [ ] Exception hierarchy (`Throwable`, `Exception`, `RuntimeException`, `Error`)
-- [ ] Handling exceptions: `try`, `catch`, `finally`
-- [ ] `try-with-resources` and automatic resource closing
-- [ ] Execution flow summary (try -> catch -> finally)
-- [ ] `throw` vs `throws` and when to use each
-- [ ] Custom (user-defined) exceptions and why to use them
+- [x] Introduction to exceptions (what, why, advantages)
+- [x] Types of exceptions: Checked, Unchecked, Errors
+- [x] Exception hierarchy (`Throwable`, `Exception`, `RuntimeException`, `Error`)
+- [x] Handling exceptions: `try`, `catch`, `finally`
+- [x] `try-with-resources` and automatic resource closing
+- [x] Execution flow summary (try -> catch -> finally)
+- [x] `throw` vs `throws` and when to use each
+- [x] Custom (user-defined) exceptions and why to use them
 
 ## Workshop: Contact App (from the Workshop)
-- [ ] Workshop objective (manage contacts stored in a text file)
-- [ ] Learning goals (validation, custom exceptions, try-with-resources, centralized handler)
-- [ ] Prerequisites & setup (Maven project: `se.lexicon` / `contact-app-workshop`)
-- [ ] Git init, push to GitHub/GitLab, share link with instructor
+- [x] Workshop objective (manage contacts stored in a text file)
+- [x] Learning goals (validation, custom exceptions, try-with-resources, centralized handler)
+- [x] Prerequisites & setup (Maven project: `se.lexicon` / `contact-app-workshop`)
+- [x] Git init, push to GitHub/GitLab, share link with instructor
 - [x] Class diagram / package structure (model, data, view, controller, exception)
 
 ```mermaid
@@ -90,18 +104,18 @@ classDiagram
     FileContactDAOImpl ..> ContactStorageException : throws
     FileContactDAOImpl ..> DuplicateContactException : throws
 ```
-- [ ] Task 1: `Contact` model with validation + phone regex (`^\d{10}$`)
-- [ ] Task 2: Custom checked exceptions (`ContactStorageException`, `DuplicateContactException`)
-- [ ] Task 3: DAO layer (`ContactDAO`, `FileContactDAOImpl`) - no console printing
-- [ ] Task 4: View & Controller (MVC), try-catch loop in controller
-- [ ] Task 5: Explain the MVC design pattern
+- [x] Task 1: `Contact` model with validation + phone regex (`^\d{10}`)
+- [x] Task 2: Custom checked exceptions (`ContactStorageException`, `DuplicateContactException`)
+- [x] Task 3: DAO layer (`ContactDAO`, `FileContactDAOImpl`) - no console printing
+- [x] Task 4: View & Controller (MVC), try-catch loop in controller
+- [x] Task 5: Explain the MVC design pattern
 
 ## Submission & Grading
-- [ ] How to run the application
-- [ ] Where to submit (repository link)
-- [ ] Checklist of completed tasks
+- [x] How to run the application
+- [x] Where to submit (repository link)
+- [x] Checklist of completed tasks
 
 ## Miscellaneous
-- [ ] Built with / Tech stack (Java, Maven)
+- [x] Built with / Tech stack (Java, Maven)
 - [ ] License (optional)
-- [ ] Authors / instructor name (optional)
+- [x] Authors / instructor name (optional)

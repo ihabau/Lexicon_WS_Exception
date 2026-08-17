@@ -1,21 +1,18 @@
 package se.lexicon;
 
+import se.lexicon.controller.ContactController;
+import se.lexicon.data.ContactDAO;
 import se.lexicon.data.FileContactDAOImpl;
-import se.lexicon.model.Contact;
 import se.lexicon.view.ContactView;
 
-import java.awt.*;
-
-
 public class Main {
-    static void main() {
+    public static void main(String[] args) {
 
-        Contact contact1 = new Contact("ihab", "0704932668");
-       //Contact contact2 = new Contact("", "0704932668"); //invalid name
-       //Contact contact3 = new Contact("ihab", "07032668"); // invalid number
+        ContactView view = new ContactView();
+        ContactDAO dao = new FileContactDAOImpl();
+        ContactController controller = new ContactController(view, dao);
 
-
-
+        controller.run();
 
     }
 }

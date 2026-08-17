@@ -1,6 +1,6 @@
 package se.lexicon.exception;
 
-public class DuplicateContactException extends RuntimeException {
+public class DuplicateContactException extends Exception {
     public DuplicateContactException(String message) {
         super(message);
     }

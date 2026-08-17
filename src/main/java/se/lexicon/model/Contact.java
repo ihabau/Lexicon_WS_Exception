@@ -6,7 +6,7 @@ public class Contact {
     private String phoneNumber;
 
     public Contact(String name, String phoneNumber) {
-        if (name.isBlank() || name == null) {
+        if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Invalid name!");
         }
 
@@ -29,7 +29,7 @@ public class Contact {
 
     //setters
     public void setName(String name) {
-        if (name.isBlank() || name == null) {
+        if ( name == null || name.isBlank()) {
             throw new IllegalArgumentException("Invalid name!");
         }
         this.name = name;

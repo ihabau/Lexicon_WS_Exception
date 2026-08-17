@@ -4,22 +4,16 @@ import se.lexicon.model.Contact;
 import java.util.List;
 import java.util.Scanner;
 
-// TODO: the workshop says the View handles ALL user interaction via Scanner and System.out - remove javax.swing.*
-
 public class ContactView {
 
-    // what is the prompt for?
+    private final Scanner input = new Scanner(System.in);
+
     public String getUserInput(String prompt) {
-        Scanner input = new Scanner(System.in);
-
-        System.out.print("> ");
-        String message = input.next();
-
-        return message;
+        System.out.print(prompt);
+        return input.nextLine();
     }
 
     public void displayMenu() {
-
         System.out.print("""
                 ------------CONTACTS------------
                 1: Add
@@ -28,10 +22,12 @@ public class ContactView {
                 4: Exit
                 --------------------------------
                 """);
-
     }
 
     public void displayContacts(List<Contact> contacts) {
+        contacts.forEach(contact -> {
+            System.out.println("Name: " + contact.getName() + " | Phone: " + contact.getPhoneNumber());
+        });
     }
 
     public void displayMessage(String message) {
@@ -39,6 +35,6 @@ public class ContactView {
     }
 
     public void displayError(String message) {
+        System.out.println("ERROR: " + message);
     }
-
 }
