@@ -1,50 +1,102 @@
 ![Lexicon Logo](https://lexicongruppen.se/media/wi5hphtd/lexicon-logo.svg)
 
-# Workshop: Vehicle Registration System
+# Workshop: Vehicle Registration — your first JDBC DAO
+
+> **Step 7 of 10** in the progressive series that ends with a full **Event-Manager-style application**
+> (model → dao → daoImpl → service → ui → **util** → **SQL** → **JDBC** → exceptions).
+
+| Difficulty | Hints provided | New Event-Manager parts |
+|:---:|:---:|:---:|
+| 7 / 10 | 6 | `util` + SQL schema + your **first JDBC DAO** — the moment the app talks to MySQL |
+
+---
 
 ## Objective
-Build a Java application to manage vehicle registrations stored in a text file using advanced exception handling techniques.
+
+Until now every model was persisted to a **text file**. Real applications persist to a **database**.
+In this step you leave the file-based DAO behind and implement the mechanics the Event Manager's
+`se.lexicon.util.DatabaseConnection` provides:
+
+1.  A **`DatabaseConnection`** utility that opens and hands out JDBC `Connection`s.
+2.  A **SQL schema** (`SQL_database/vehicle_registration.sql`) that builds the `vehicle` table.
+3.  A **`VehicleJdbcDAOImpl`** whose `findAll/save/findByRegistrationNumber` actually run SQL.
+
+Your service, controller and view from steps 2–6 stay **unchanged** — that is the payoff of the
+layered design you have been building.
 
 ## Learning Goals
-*   Implement the application based on the provided Class Diagram.
-*   Use **Unchecked Exceptions** for data validation.
-*   Create and use **Custom Checked Exceptions**.
-*   Apply **Try-with-Resources** for safe File IO.
-*   Implement a **Centralized Exception Handler**.
+
+*   The JDBC dance: `DriverManager.getConnection` → `PreparedStatement` → `executeQuery/executeUpdate`;
+    `ResultSet → object` mapping; `try-with-resources` for everything.
+*   `PreparedStatement` with `?` placeholders (prevents SQL injection — never concatenate strings into SQL).
+*   A single, reusable `DatabaseConnection` (singleton) instead of scattered `getConnection` calls.
+*   Reading a real schema file and creating the table in MySQL/Workbench.
 
 ---
 
-## Prerequisites & Submission
-**Task:** Setup your environment and prepare for submission.
+## Prerequisites
 
-1.  **Create Maven Project:** Create a new Maven project in your IDE.
-    *   **Group Id:** `se.lexicon`
-    *   **Artifact Id:** `vehicle-registration-workshop`
-2.  **Version Control:** Initialize a Git repository for your project and push it to GitHub/GitLab.
-3.  **Submission:** Share the link to your repository with your instructor once you have started or completed the workshop.
+*   MySQL Server running locally (XAMPP or native install) — or a Docker MySQL container.
+*   A database named `vehicle_db` and a user with rights to it.
+*   Layers from steps 1–6 are assumed.
+*   Commit after each task; push this branch when complete.
 
 ---
 
-## Conceptual Model (Class Diagram)
+## Step 7 — Layered target
 
-The following diagram shows the relationship between the different layers of the application and how exceptions flow through them using the **MVC (Model-View-Controller)** pattern.
+```mermaid
+flowchart TD
+    subgraph UI["ui + controller (unchanged from steps 2 & 6)"]
+        VIEW["VehicleView"]
+        CTRL["VehicleController"]
+        SVC["VehicleService"]
+    end
 
-### Suggested Package Structure
-*   **Model:** `model`
-*   **Data:** `data`
-*   **View:** `view`
-*   **Controller:** `controller`
-*   **Exception:** `exception`
+    subgraph DATA["data — NOW JDBC"]
+        DAO["VehicleDAO <<interface>>"]
+        JDBC["VehicleJdbcDAOImpl\nPreparedStatement + ResultSet"]
+    end
+
+    subgraph UTIL["util (NEW)"]
+        DB["DatabaseConnection\nstatic getConnection() Connection"]
+    end
+
+    subgraph SQL["SQL_database/ (NEW)"]
+        SCHEMA["vehicle_registration.sql\nCREATE TABLE vehicle ..."]
+    end
+
+    MYSQL[("MySQL\nvehicle_db.vehicle")]
+
+    CTRL --> SVC --> DAO
+    DAO <|.. JDBC
+    JDBC -->|"jdbc:mysql://..."| DB
+    DB --> MYSQL
+    SCHEMA -.->|"run once in Workbench"| MYSQL
+
+    style UI fill:#e1f5fe,stroke:#0288d1
+    style DATA fill:#e8f5e9,stroke:#388e3c
+    style UTIL fill:#fff3e0,stroke:#f57c00
+    style SQL fill:#fce4ec,stroke:#c62828
+```
+
+Compare with the Event Manager: the same `DatabaseConnection` + `SQL_database/event_management.sql`
+are what every later DAO (Participant, Event, Invitation) builds on.
+
+---
+
+## Class Diagram
 
 ```mermaid
 classDiagram
     namespace model {
         class Vehicle {
-            -String make
+            -String registrationNumber
+            -String brand
             -String model
-            -int year
-            -String licensePlate
-            +Vehicle(String make, String model, int year, String licensePlate)
+            -int modelYear
+            -String ownerName
+            +Vehicle(...)
         }
     }
 
@@ -52,86 +104,193 @@ classDiagram
         class VehicleDAO {
             <<interface>>
             +findAll() List~Vehicle~
-            +save(Vehicle vehicle) void
-            +findByLicensePlate(String licensePlate) Vehicle
+            +save(Vehicle v) void
+            +findByRegistrationNumber(String reg) Vehicle
         }
-        class FileVehicleDAOImpl {
-            -Path filePath
-        }
-    }
-
-    namespace view {
-        class VehicleView {
-            +getUserInput(String prompt) String
-            +displayMenu() void
-            +displayVehicles(List~Vehicle~ vehicles) void
-            +displayMessage(String message) void
-            +displayError(String message) void
+        class VehicleJdbcDAOImpl {
+            -Connection getConnection()
         }
     }
 
-    namespace controller {
-        class VehicleController {
-            -VehicleDAO vehicleDAO
-            -VehicleView vehicleView
-            +run() void
+    namespace util {
+        class DatabaseConnection {
+            -static final String URL
+            -static final String USER
+            -static final String PASSWORD
+            +getConnection() Connection$
         }
     }
 
     namespace exception {
-        class VehicleStorageException { }
-        class DuplicateVehicleException { }
-        class InvalidYearException { }
-        class ExceptionHandler {
-            +handle(Exception e)$ void
-        }
+        class VehicleStorageException
     }
 
-    VehicleDAO <|.. FileVehicleDAOImpl
-    VehicleController --> VehicleDAO : uses
-    VehicleController --> VehicleView : updates
-    VehicleController ..> ExceptionHandler : delegates errors
-
-    VehicleDAO ..> Vehicle : manages
-    FileVehicleDAOImpl ..> Vehicle : persists
-
-    Vehicle ..> IllegalArgumentException : throws
-    Vehicle ..> InvalidYearException : throws
-    FileVehicleDAOImpl ..> VehicleStorageException : throws
-    FileVehicleDAOImpl ..> DuplicateVehicleException : throws
+    VehicleDAO <|.. VehicleJdbcDAOImpl
+    VehicleJdbcDAOImpl --> DatabaseConnection : uses
+    VehicleJdbcDAOImpl ..> VehicleStorageException : wraps SQLException
 ```
 
 ---
 
-## 1: The Model & Validation (Unchecked)
-**Task:** Create the `Vehicle` class in the `model` package.
+## Test Scenarios (diagram test)
 
-*   **Validation:** Validate fields in the setters and use in the constructor, throw `IllegalArgumentException` if the input is invalid (make must not be blank, model must not be blank, year must be >= 1886).
-*   **License Plate Validation:** Validate the license plate format using a Regular Expression (e.g., `^[A-Z]{3}-\\d{3}$`).
-
-## 2: Custom Exceptions (Checked)
-**Task:** Define `VehicleStorageException`, `DuplicateVehicleException`, and `InvalidYearException` in the `exception` package.
-
-## 3: The Data Layer (DAO)
-**Task:** Implement `VehicleDAO` and `FileVehicleDAOImpl` in the `data` package.
-
-*   **Responsibility:** The DAO is strictly for data persistence. It should **never** print to the console. It only communicates through return values or **Exceptions**.
-*   **File Format:** Each line in `vehicles.txt` should be: `make,model,year,licensePlate`
-
-## 4: The View & Controller (MVC)
-**Task:** Create the `VehicleView` (in `view` package) and `VehicleController` (in `controller` package).
-
-*   **The View:** Responsible for all user interaction (`Scanner` and `System.out`).
-*   **The Controller:**
-    *   Coordinates between the View and the Model.
-    *   Contains the `try-catch` loop.
-    *   Catches exceptions from the Model/DAO and tells the View what to display.
-*   **The App/Main class:** Simply initializes the components and starts the Controller.
-
-## 5: The MVC Design Pattern
-**Task:** Explain the MVC (Model-View-Controller) design pattern.
+| # | Scenario | Expected result |
+|---|----------|-----------------|
+| 1 | `schema.sql` run in Workbench | `vehicle` table exists (check the schema pane) |
+| 2 | Add vehicle `ABC123`, Toyota, Corolla, 2020, Anna | Row appears in the table; `getAll()` shows it |
+| 3 | Add `ABC123` again | `DuplicateVehicleException` (service rule) — no duplicate row in DB |
+| 4 | Insert a row *manually in Workbench*, then run the app | `getAll()` shows it too — the app reads real data |
+| 5 | Stop MySQL, then call `findAll` | `VehicleStorageException` → friendly handler message (not a stack trace) |
+| 6 | Edit a registration number to `ABC12–3` in the running app | `IllegalArgumentException` (validation), loop continues |
 
 ---
 
-## Bonus Challenge
-Add a **search by year range** feature. Allow the user to filter and display all vehicles registered between a given start year and end year.
+## Tasks
+
+### Task 1 — JDBC dependency + the connection utility
+
+Add to `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>com.mysql</groupId>
+    <artifactId>mysql-connector-j</artifactId>
+    <version>8.4.0</version>
+</dependency>
+```
+
+Create `util.DatabaseConnection` (mirror `se.lexicon.util.DatabaseConnection`):
+
+```java
+public final class DatabaseConnection {
+    private static final String URL = "jdbc:mysql://localhost:3306/vehicle_db";
+    private static final String USER = "root";
+    private static final String PASSWORD = "your_password_here";
+
+    private DatabaseConnection() { }
+
+    public static Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(URL, USER, PASSWORD);
+    }
+}
+```
+
+Keep the credentials here for now (it's a local classroom DB). Real apps read them from an
+environment variable or `db.properties` — never commit real passwords.
+
+### Task 2 — The schema
+
+Create `SQL_database/vehicle_registration.sql`:
+
+```sql
+CREATE DATABASE IF NOT EXISTS vehicle_db;
+USE vehicle_db;
+
+CREATE TABLE IF NOT EXISTS vehicle (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    registration_number VARCHAR(10) NOT NULL UNIQUE,
+    brand VARCHAR(50) NOT NULL,
+    model VARCHAR(50) NOT NULL,
+    model_year INT NOT NULL,
+    owner_name VARCHAR(100) NOT NULL
+);
+```
+
+Run it once in MySQL Workbench. The `UNIQUE` on `registration_number` is the database-level guard
+that matches the service-level duplicate check.
+
+### Task 3 — The model
+
+`Vehicle`: `registrationNumber` (must match `^[A-Z]{3}\d{3}$`),
+`brand`/`model` (not blank), `modelYear` (>= 1886), `ownerName` (not blank).
+Validation in the constructor/setters → `IllegalArgumentException`.
+
+### Task 4 — `VehicleDAO` + `VehicleJdbcDAOImpl`
+
+Interface first, then the JDBC implementation. The two hard-won JDBC patterns:
+
+```java
+// read
+String sql = "SELECT * FROM vehicle";
+try (Connection c = DatabaseConnection.getConnection();
+     Statement st = c.createStatement();
+     ResultSet rs = st.executeQuery(sql)) {
+    while (rs.next()) {
+        vehicles.add(new Vehicle(
+            rs.getString("registration_number"),
+            rs.getString("brand"),
+            rs.getString("model"),
+            rs.getInt("model_year"),
+            rs.getString("owner_name")));
+    }
+} catch (SQLException e) {
+    throw new VehicleStorageException("Could not read vehicles", e);
+}
+
+// write
+String sql = "INSERT INTO vehicle (registration_number, brand, model, model_year, owner_name) VALUES (?, ?, ?, ?, ?)";
+try (Connection c = DatabaseConnection.getConnection();
+     PreparedStatement ps = c.prepareStatement(sql)) {
+    ps.setString(1, v.getRegistrationNumber());
+    ps.setString(2, v.getBrand());
+    ps.setString(3, v.getModel());
+    ps.setInt(4, v.getModelYear());
+    ps.setString(5, v.getOwnerName());
+    ps.executeUpdate();
+}
+```
+
+*   `findByRegistrationNumber`: `SELECT ... WHERE registration_number = ?` with `ps.setString(1, reg)`.
+*   All of it wrapped in `try-with-resources` so Connections/Statements/ResultSets always close.
+*   Every `SQLException` becomes `VehicleStorageException` — your step-4 handler prints it.
+
+### Task 5 — Swap the DAO (that's it)
+
+In `Main`, replace the file DAO with the JDBC one:
+
+```java
+VehicleDAO dao = new VehicleJdbcDAOImpl();
+VehicleService service = new VehicleService(dao);
+new VehicleController(service, view).run();
+```
+
+Service, controller and view are **not touched**. If you find yourself editing `VehicleService`,
+you have put SQL where it doesn't belong.
+
+### Task 6 — Explain
+
+Write 4–6 sentences: what problem does the `DatabaseConnection` singleton solve, and why did the
+DAO wrap `SQLException` in a custom exception instead of propagating it?
+
+---
+
+## Hints & Help (6 hints)
+
+1. **One connection per operation.** Open in the method, close with try-with-resources. A shared
+   long-lived single `Connection` is how classroom apps deadlock.
+2. `ResultSet` is 1-based: `rs.getString(1)` is the first column. Prefer **named** columns
+   (`rs.getString("registration_number")`) so reordering the table doesn't break your code.
+3. `PreparedStatement` placeholders are 1-based too — set them in `VALUES (?, ?, ?, ?, ?)` order.
+4. `ClassNotFoundException: com.mysql...` means the dependency is missing from `pom.xml` (run `mvn compile` — it downloads first).
+5. `Unknown database 'vehicle_db'` → you forgot Task 2. Run the schema file once in Workbench.
+6. Check the DB really changed: `SELECT * FROM vehicle;` in Workbench after each save — the app and
+   the DB client see the same rows.
+
+---
+
+## Checklist
+
+- [ ] `mysql-connector-j` in `pom.xml`
+- [ ] `util.DatabaseConnection.getConnection()`
+- [ ] `SQL_database/vehicle_registration.sql` + table created
+- [ ] `Vehicle` model with plate regex + year validation
+- [ ] `VehicleJdbcDAOImpl` — `findAll`, `save`, `findByRegistrationNumber`
+- [ ] SQLException → `VehicleStorageException` everywhere
+- [ ] `Main` wired to `VehicleJdbcDAOImpl`
+- [ ] All 6 test scenarios pass (including the manual-insert one)
+
+## Bonus Challenge (optional)
+
+Add `void deleteByRegistrationNumber(String reg)` and `long count()` to the DAO
+(`DELETE FROM ... WHERE ...`, `SELECT COUNT(*)`), expose both through the service, and add menu
+items. Watch the row disappear live in Workbench.
