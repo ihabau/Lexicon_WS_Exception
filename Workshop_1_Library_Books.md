@@ -2,39 +2,70 @@
 
 # Workshop: Library Book Management
 
+> **Step 1 of 10** in the progressive series that ends with a full **Event-Manager-style application**
+> (model → dao → daoImpl → service → ui → utility → exceptions → sql).
+
+| Difficulty | Hints provided | New Event-Manager part |
+|:---:|:---:|:---:|
+| 1 / 10 | 12 | `model` — encapsulation & validation |
+
+---
+
 ## Objective
-Build a Java application to manage library books stored in a text file using advanced exception handling techniques.
+
+Build the **domain model** of a library book management system: a clean, validated `Book`
+class that the later steps (DAO, View, Controller, Service, SQL...) will build on.
+
+This step mirrors the `se.lexicon.model` package of the referencing **Event Management App**
+(`Event`, `Participant`, `Invitation`, ...): plain Java classes with `private` fields, getters,
+a validating constructor/setters, and a well-formed `toString()`.
 
 ## Learning Goals
-*   Implement the application based on the provided Class Diagram.
-*   Use **Unchecked Exceptions** for data validation.
-*   Create and use **Custom Checked Exceptions**.
-*   Apply **Try-with-Resources** for safe File IO.
-*   Implement a **Centralized Exception Handler**.
+
+*   Encapsulation — keep fields `private`, expose only getters/setters.
+*   Validation with **unchecked exceptions** (`IllegalArgumentException`).
+*   **Regular expressions** for format validation (ISBN).
+*   Type safety & immutability of simple fields.
 
 ---
 
 ## Prerequisites & Submission
-**Task:** Setup your environment and prepare for submission.
 
-1.  **Create Maven Project:** Create a new Maven project in your IDE.
-    *   **Group Id:** `se.lexicon`
-    *   **Artifact Id:** `library-book-workshop`
-2.  **Version Control:** Initialize a Git repository for your project and push it to GitHub/GitLab.
-3.  **Submission:** Share the link to your repository with your instructor once you have started or completed the workshop.
+1.  Maven project, **Group Id:** `se.lexicon`, **Artifact Id:** `library-book-workshop`.
+2.  Package structure for this step: `se.lexicon.model`.
+3.  Commit after each task. Push this branch when complete.
+
+> Previous steps of this series are the other `workshop-*` branches. Each one adds a little more
+> of the Event-Manager architecture and gives **fewer hints**.
 
 ---
 
-## Conceptual Model (Class Diagram)
+## Step 1 — Layered target (read this first)
 
-The following diagram shows the relationship between the different layers of the application and how exceptions flow through them using the **MVC (Model-View-Controller)** pattern.
+You are building the **first slice** of a layered application. Today it looks like this:
 
-### Suggested Package Structure
-*   **Model:** `model`
-*   **Data:** `data`
-*   **View:** `view`
-*   **Controller:** `controller`
-*   **Exception:** `exception`
+```mermaid
+flowchart TD
+    subgraph MODEL["se.lexicon.model"]
+        BOOK["Book\n-title:String\n-author:String\n-isbn:String\n-available:boolean\n+validate()"]
+    end
+
+    APP["Main.java\ncreates a Book and prints it"]
+
+    APP -->|"new Book(...)"| BOOK
+    BOOK -->|"IllegalArgumentException"| ERR["console message\nunchecked — no catch needed"]
+
+    style MODEL fill:#e8f5e9,stroke:#388e3c
+    style APP fill:#e1f5fe,stroke:#0288d1
+    style ERR fill:#ffebee,stroke:#c62828
+```
+
+Later steps will add: `view` + `controller` (step 2), `dao` + `daoImpl` (step 3),
+`exception` handling (step 4), and so on up to `service`, `utility` and `sql`.
+
+---
+
+## Class Diagram
 
 ```mermaid
 classDiagram
@@ -45,94 +76,104 @@ classDiagram
             -String isbn
             -boolean available
             +Book(String title, String author, String isbn)
+            +Book(String title, String author, String isbn, boolean available)
+            +getTitle() String
+            +getAuthor() String
+            +getIsbn() String
+            +isAvailable() boolean
+            +setAvailable(boolean available) void
+            +toString() String
+            -validateTitle(String title)
+            -validateIsbn(String isbn)
         }
     }
 
-    namespace data {
-        class BookDAO {
-            <<interface>>
-            +findAll() List~Book~
-            +save(Book book) void
-            +findByTitle(String title) Book
-        }
-        class FileBookDAOImpl {
-            -Path filePath
-        }
-    }
-
-    namespace view {
-        class BookView {
-            +getUserInput(String prompt) String
-            +displayMenu() void
-            +displayBooks(List~Book~ books) void
-            +displayMessage(String message) void
-            +displayError(String message) void
-        }
-    }
-
-    namespace controller {
-        class BookController {
-            -BookDAO bookDAO
-            -BookView bookView
-            +run() void
-        }
-    }
-
-    namespace exception {
-        class BookStorageException { }
-        class DuplicateBookException { }
-        class BookNotAvailableException { }
-        class ExceptionHandler {
-            +handle(Exception e)$ void
-        }
-    }
-
-    BookDAO <|.. FileBookDAOImpl
-    BookController --> BookDAO : uses
-    BookController --> BookView : updates
-    BookController ..> ExceptionHandler : delegates errors
-
-    BookDAO ..> Book : manages
-    FileBookDAOImpl ..> Book : persists
-
-    Book ..> IllegalArgumentException : throws
-    FileBookDAOImpl ..> BookStorageException : throws
-    FileBookDAOImpl ..> DuplicateBookException : throws
-    Book ..> BookNotAvailableException : throws
+    Book ..> IllegalArgumentException : throws on invalid input
 ```
 
 ---
 
-## 1: The Model & Validation (Unchecked)
-**Task:** Create the `Book` class in the `model` package.
+## Test Scenarios (diagram test)
 
-*   **Validation:** for fields in the setters and use in constructor, throw `IllegalArgumentException` if the input is invalid (title and author must not be blank).
-*   **ISBN Validation:** Validate the ISBN format using a Regular Expression (e.g., `^\\d{13}$` for 13-digit ISBNs).
-*   **Available Field:** Default to `true` when a new book is created.
+Run each scenario manually after implementing the class, and record the result.
 
-## 2: Custom Exceptions (Checked)
-**Task:** Define `BookStorageException`, `DuplicateBookException`, and `BookNotAvailableException` in the `exception` package.
+```mermaid
+flowchart TD
+    S1["1. new Book('Clean Code','R. Martin','9780132350884')"] --> OK1["prints: Clean Code by R. Martin (9780132350884) — available"]
+    S2["2. new Book('','R. Martin','9780132350884')"] --> E1["IllegalArgumentException: title must not be blank"]
+    S3["3. new Book('Clean Code','R. Martin','123')"] --> E2["IllegalArgumentException: invalid ISBN"]
+    S4["4. check availability"] --> OK2["isAvailable() == true (default)"]
+    S5["5. new Book(..., false)"] --> OK3["isAvailable() == false"]
+```
 
-## 3: The Data Layer (DAO)
-**Task:** Implement `BookDAO` and `FileBookDAOImpl` in the `data` package.
-
-*   **Responsibility:** The DAO is strictly for data persistence. It should **never** print to the console. It only communicates through return values or **Exceptions**.
-*   **File Format:** Each line in `books.txt` should be: `title,author,isbn,available`
-
-## 4: The View & Controller (MVC)
-**Task:** Create the `BookView` (in `view` package) and `BookController` (in `controller` package).
-
-*   **The View:** Responsible for all user interaction (`Scanner` and `System.out`).
-*   **The Controller:**
-    *   Coordinates between the View and the Model.
-    *   Contains the `try-catch` loop.
-    *   Catches exceptions from the Model/DAO and tells the View what to display.
-*   **The App/Main class:** Simply initializes the components and starts the Controller.
-
-## 5: The MVC Design Pattern
-**Task:** Explain the MVC (Model-View-Controller) design pattern.
+| # | Scenario | Expected result |
+|---|----------|-----------------|
+| 1 | Valid book (13-digit ISBN) | Object created, `available == true`, readable via getters |
+| 2 | Blank `author` or `title` | `IllegalArgumentException` is thrown |
+| 3 | ISBN shorter/longer than 13 digits | `IllegalArgumentException` is thrown |
+| 4 | `toString()` output | Contains title, author, ISBN and availability |
+| 5 | `new Book(t, a, isbn, false)` | Second constructor → `available == false` |
 
 ---
 
-## Bonus Challenge
-Add a **checkout** and **return** feature. When a book is checked out, set `available` to `false`. Throw `BookNotAvailableException` if someone tries to check out a book that is already unavailable.
+## Tasks
+
+### Task 1 — Create the `Book` class
+
+Create `src/main/java/se/lexicon/model/Book.java` with:
+
+*   `private` fields: `String title`, `String author`, `String isbn`, `boolean available`.
+*   A constructor `Book(String title, String author, String isbn)` that **defaults** `available = true`.
+*   A second constructor `Book(String title, String author, String isbn, boolean available)`.
+*   Getters: `getTitle()`, `getAuthor()`, `getIsbn()`, `isAvailable()`.
+*   Setter: only `setAvailable(boolean)` (title/author/isbn are read-only after creation).
+*   `toString()` returning a readable summary.
+
+### Task 2 — Validate in the constructor
+
+*   `title` and `author` must **not be blank** (empty or whitespace) → else `IllegalArgumentException`.
+*   `isbn` must match `^\d{13}$` (exactly 13 digits) → else `IllegalArgumentException`.
+*   Perform validation through private helper methods (`validateTitle`, `validateIsbn`).
+
+### Task 3 — Wire it up
+
+*   Make sure `Main.java` creates a few `Book` instances, prints them with `System.out.println`,
+    and demonstrates (via try/catch or by letting it crash) that invalid books throw.
+
+### Task 4 — Explain
+
+Write 3–5 sentences in your own words: *why* did we use `IllegalArgumentException`
+(unchecked) instead of a checked exception for validation in the model?
+
+---
+
+## Hints & Help (12 hints — this is the friendliest step)
+
+1. A blank-string check: `title == null || title.isBlank()`.
+2. The ISBN regex in Java: `isbn.matches("^\\d{13}$")`.
+3. Two constructors = **constructor overloading**; both call the same validation.
+4. Keep fields guarded — after the constructor, `title`/`author`/`isbn` should not change.
+5. Use `this(...)` only if you add a delegating constructor; otherwise keep them independent.
+6. `available` default belongs in one place: the 3-arg constructor sets `this.available = true`.
+7. `toString()` example shape: `"Clean Code by Robert C. Martin — available"`.
+8. Java allows `Author b = new Book(...);` only if `Book` extends/implements `Author` — never do that here.
+9. Fields are `private`; the outside world uses getters — this is **encapsulation**.
+10. The exception message should say *what* is wrong: `"Title must not be blank"`.
+11. Test with `Book("", "x", "9780132350884")` — your code must reject it.
+12. Run with `mvn compile` then run `Main`; use the test scenarios above to verify.
+
+---
+
+## Checklist
+
+- [ ] `Book` exists in `se.lexicon.model` with `private` fields + getters
+- [ ] Validation throws `IllegalArgumentException` for blank title/author
+- [ ] ISBN validated with regex `^\d{13}$`
+- [ ] `available` defaults to `true`; 4-arg constructor allows setting it
+- [ ] `toString()` is readable
+- [ ] All 5 test scenarios pass
+
+## Bonus Challenge (optional)
+
+Add a `boolean isSameBook(Book other)` method that compares by ISBN, and a
+`static boolean isValidIsbn(String isbn)` utility method — you will reuse it in later steps.
