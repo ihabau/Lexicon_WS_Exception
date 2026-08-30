@@ -2,39 +2,73 @@
 
 # Workshop: Product Inventory System
 
+> **Step 3 of 10** in the progressive series that ends with a full **Event-Manager-style application**
+> (model → dao → daoImpl → service → ui → utility → exceptions → sql).
+
+| Difficulty | Hints provided | New Event-Manager part |
+|:---:|:---:|:---:|
+| 3 / 10 | 10 | `dao` (interface) + `daoImpl` (file persistence) |
+
+---
+
 ## Objective
-Build a Java application to manage product inventory stored in a text file using advanced exception handling techniques.
+
+Introduce the **data access layer**: an interface (`ProductDAO`) that hides *where* data lives and
+an implementation (`FileProductDAOImpl`) that stores products **in a text file**. In the Event Manager
+app this layer becomes the `se.lexicon.dao` package (`EventDAO` / `EventDAOImpl`, JDBC + SQL). Here we
+learn the *interface/implementation* pattern with **file I/O**, **try-with-resources** and checked
+`IOException` handling first.
+
+The golden rule of this step: **a DAO never prints to the console** — it communicates only through
+return values and exceptions.
 
 ## Learning Goals
-*   Implement the application based on the provided Class Diagram.
-*   Use **Unchecked Exceptions** for data validation.
-*   Create and use **Custom Checked Exceptions**.
-*   Apply **Try-with-Resources** for safe File IO.
-*   Implement a **Centralized Exception Handler**.
+
+*   Program against an **interface** (`ProductDAO`), not the implementation.
+*   File I/O: write every field on one line, separated by commas.
+*   **Try-with-resources** for `BufferedWriter` / `Files.lines(...)`.
+*   Wrap checked `IOException` into your own checked `ProductStorageException`.
+*   Lazy-loading the file into memory on the first access (`findAll()`).
 
 ---
 
-## Prerequisites & Submission
-**Task:** Setup your environment and prepare for submission.
+## Prerequisites
 
-1.  **Create Maven Project:** Create a new Maven project in your IDE.
-    *   **Group Id:** `se.lexicon`
-    *   **Artifact Id:** `product-inventory-workshop`
-2.  **Version Control:** Initialize a Git repository for your project and push it to GitHub/GitLab.
-3.  **Submission:** Share the link to your repository with your instructor once you have started or completed the workshop.
+*   Maven project, **Group Id:** `se.lexicon`, **Artifact Id:** `product-inventory-workshop`.
+*   Packages: `model`, `data`, `view`, `controller`, `exception`.
+*   You can reuse the `ProductView`/`ProductController` pattern from step 2.
+*   Commit after each task; push this branch when complete.
 
 ---
 
-## Conceptual Model (Class Diagram)
+## Step 3 — Layered target
 
-The following diagram shows the relationship between the different layers of the application and how exceptions flow through them using the **MVC (Model-View-Controller)** pattern.
+```mermaid
+flowchart TD
+    subgraph DAO["se.lexicon.data"]
+        IFACE["ProductDAO <<interface>>\nfindAll() · save() · findByBarcode()"]
+        IMPL["FileProductDAOImpl\nloads products.txt into List\nappends on save()"]
+    end
 
-### Suggested Package Structure
-*   **Model:** `model`
-*   **Data:** `data`
-*   **View:** `view`
-*   **Controller:** `controller`
-*   **Exception:** `exception`
+    CTRL["ProductController\n(step 2 pattern)"]
+    FILE[("products.txt\nname,price,quantity,barcode\n...")]
+
+    CTRL -->|"calls interface methods"| IFACE
+    IFACE <|.. IMPL : implements
+    IMPL -->|"read / write lines"| FILE
+    IMPL ..>|"throws ProductStorageException"| CTRL
+
+    style DAO fill:#e8f5e9,stroke:#388e3c
+    style CTRL fill:#f3e5f5,stroke:#7b1fa2
+    style FILE fill:#fff3e0,stroke:#f57c00
+```
+
+The controller must know **only** the interface — swap the file implementation for a JDBC one in
+later steps without touching the controller.
+
+---
+
+## Class Diagram
 
 ```mermaid
 classDiagram
@@ -45,6 +79,8 @@ classDiagram
             -int quantity
             -String barcode
             +Product(String name, double price, int quantity, String barcode)
+            +getBarcode() String
+            +toString() String
         }
     }
 
@@ -56,85 +92,125 @@ classDiagram
             +findByBarcode(String barcode) Product
         }
         class FileProductDAOImpl {
-            -Path filePath
-        }
-    }
-
-    namespace view {
-        class ProductView {
-            +getUserInput(String prompt) String
-            +displayMenu() void
-            +displayProducts(List~Product~ products) void
-            +displayMessage(String message) void
-            +displayError(String message) void
-        }
-    }
-
-    namespace controller {
-        class ProductController {
-            -ProductDAO productDAO
-            -ProductView productView
-            +run() void
+            -List~Product~ products
+            +FileProductDAOImpl() 
+            -void loadFromFile()
         }
     }
 
     namespace exception {
-        class ProductStorageException { }
-        class DuplicateProductException { }
-        class InsufficientStockException { }
-        class ExceptionHandler {
-            +handle(Exception e)$ void
+        class ProductStorageException {
+            <<checked>>
+            +ProductStorageException(String message)
         }
     }
 
     ProductDAO <|.. FileProductDAOImpl
-    ProductController --> ProductDAO : uses
-    ProductController --> ProductView : updates
-    ProductController ..> ExceptionHandler : delegates errors
-
-    ProductDAO ..> Product : manages
     FileProductDAOImpl ..> Product : persists
-
-    Product ..> IllegalArgumentException : throws
-    Product ..> InsufficientStockException : throws
     FileProductDAOImpl ..> ProductStorageException : throws
-    FileProductDAOImpl ..> DuplicateProductException : throws
 ```
 
 ---
 
-## 1: The Model & Validation (Unchecked)
-**Task:** Create the `Product` class in the `model` package.
+## Test Scenarios (diagram test)
 
-*   **Validation:** for fields in the setters and use in constructor, throw `IllegalArgumentException` if the input is invalid.
-*   **Name Validation:** Name must not be blank.
-*   **Price Validation:** Price must be greater than 0.
-*   **Quantity Validation:** Quantity must be greater than or equal to 0.
-*   **Barcode Validation:** Barcode must match the pattern `^\d{8}$` (exactly 8 digits).
+```mermaid
+flowchart TD
+    A["controller.run()"] --> B["menu option 1: add product"]
+    B --> C["FileProductDAOImpl.save(...)"]
+    C --> D["file exists?"]
+    D -->|"no"| E["create file + parent dir"]
+    E --> F["append line name,price,quantity,barcode"]
+    D -->|"yes"| F
+    F --> G["menu option 2: list"]
+    G --> H["findAll() loads file once -> prints all"]
+    H --> I["restart program -> data still there"]
+```
 
-## 2: Custom Exceptions (Checked)
-**Task:** Define `ProductStorageException`, `DuplicateProductException`, and `InsufficientStockException` in the `exception` package.
-
-## 3: The Data Layer (DAO)
-**Task:** Implement `ProductDAO` and `FileProductDAOImpl` in the `data` package.
-
-*   **Responsibility:** The DAO is strictly for data persistence. It should **never** print to the console. It only communicates through return values or **Exceptions**.
-*   **File Format:** Each line in `products.txt` should be: `name,price,quantity,barcode`
-
-## 4: The View & Controller (MVC)
-**Task:** Create the `ProductView` (in `view` package) and `ProductController` (in `controller` package).
-
-*   **The View:** Responsible for all user interaction (`Scanner` and `System.out`).
-*   **The Controller:**
-    *   Coordinates between the View and the Model.
-    *   Contains the `try-catch` loop.
-    *   Catches exceptions from the Model/DAO and tells the View what to display.
-*   **The App/Main class:** Simply initializes the components and starts the Controller.
-
-## 5: The MVC Design Pattern
-**Task:** Explain the MVC (Model-View-Controller) design pattern.
+| # | Scenario | Expected result |
+|---|----------|-----------------|
+| 1 | Add `Coffee, 49.5, 20, 12345678` | Line appended to `products.txt` |
+| 2 | List products | All products (including previously added) printed from file |
+| 3 | Add product with **existing barcode** | Duplicate rejected (see Task 2) — message shown |
+| 4 | Find by `12345678` | Product found and printed |
+| 5 | Find by `00000000` | `null` → "Product not found" |
+| 6 | **Restart the app** and list | Data persists — came from the file, not memory |
+| 7 | Delete `products.txt` and list | App creates the file/dir again (no crash) |
 
 ---
 
-## Bonus Challenge
-Add a **purchase** feature that reduces stock. When a product is purchased, decrease the quantity by the purchased amount. Throw `InsufficientStockException` if the requested quantity exceeds the available stock.
+## Tasks
+
+### Task 1 — Model
+
+`Product` in `model`: `name` (not blank), `price` (> 0), `quantity` (>= 0), `barcode` (`^\d{8}$`).
+Getters; `toString()`. Invalid input → `IllegalArgumentException`.
+
+### Task 2 — Data exceptions
+
+Create checked exceptions in `exception`:
+
+*   `ProductStorageException extends Exception` — for file problems.
+*   `DuplicateProductException extends Exception` — thrown by `save` when barcode (or name) already exists.
+
+> Hint: these are **checked**, so methods that throw them must declare `throws`.
+
+### Task 3 — The DAO interface
+
+```java
+public interface ProductDAO {
+    List<Product> findAll() throws ProductStorageException;
+    void save(Product product) throws ProductStorageException, DuplicateProductException;
+    Product findByBarcode(String barcode) throws ProductStorageException;
+}
+```
+
+### Task 4 — The file implementation `FileProductDAOImpl`
+
+*   Field `List<Product> products`, lazily filled from `products.txt` on first `findAll()`.
+*   **Read:** `Files.lines(Paths.get("dir/products.txt"))` inside try-with-resources; split each line with `,`.
+*   **Write:** `Files.newBufferedWriter(path, StandardOpenOption.CREATE, StandardOpenOption.APPEND)`.
+*   `save()`: check for duplicate barcode/name in the loaded list FIRST, then append.
+*   Every `IOException` → `ProductStorageException("Failed to ... ", e)`.
+
+### Task 5 — Wire into the controller
+
+*   Change the controller to hold `ProductDAO productDAO` instead of a `List`.
+*   `Main`: build `FileProductDAOImpl` once, pass it as `ProductDAO` to the controller.
+*   Controller catches `ProductStorageException` / `DuplicateProductException` and calls `view.displayError(...)`.
+
+### Task 6 — Explain
+
+Write 3–5 sentences: *why does the controller depend on the interface, not on `FileProductDAOImpl`?*
+
+---
+
+## Hints & Help (10 hints)
+
+1. File format → one line per product: `name,price,quantity,barcode`.
+2. Load once: `if (products.isEmpty()) { loadFromFile(); }` at the top of `findAll()`.
+3. For each line: `String[] parts = line.split(","); double price = Double.parseDouble(parts[1]);` then `new Product(...)`.
+4. Sleep-worthy detail: make sure the parent directory exists with `Files.createDirectories(parent)` before writing.
+5. `Path path = Paths.get("dir/products.txt");` — use one constant so read and write agree.
+6. Only `findAll()` needs to read the file; `save()` only appends.
+7. Catching `IOException e` and throwing `new ProductStorageException("message", e)` keeps the original error in the cause.
+8. Duplicate check goes in the DAO, **not** the controller — persistence owns uniqueness.
+9. `Files.lines(...)` is an AutoCloseable `Stream` — try-with-resources closes it for you.
+10. Parse defensively: wrap `split`/`parse` in the same `findAll` try-block so a corrupt line becomes `ProductStorageException`, not a crash.
+
+---
+
+## Checklist
+
+- [ ] `Product` model validated (`IllegalArgumentException`)
+- [ ] `ProductStorageException`, `DuplicateProductException` (checked)
+- [ ] `ProductDAO` interface + `FileProductDAOImpl` (file, try-with-resources)
+- [ ] DAO never prints; errors flow out as exceptions
+- [ ] Controller depends on `ProductDAO` interface only
+- [ ] Data survives app restart (test scenario 6 & 7)
+
+## Bonus Challenge (optional)
+
+Add **purchase**: `void purchase(String barcode, int amount)` on the DAO that reduces quantity and
+rewrites the affected line; throw `InsufficientStockException` (checked) if `amount > quantity`.
+Persist the change to the file so it survives restart.
