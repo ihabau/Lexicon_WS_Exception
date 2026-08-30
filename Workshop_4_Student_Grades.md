@@ -2,39 +2,80 @@
 
 # Workshop: Student Grade Tracker
 
+> **Step 4 of 10** in the progressive series that ends with a full **Event-Manager-style application**
+> (model → dao → daoImpl → service → ui → utility → exceptions → sql).
+
+| Difficulty | Hints provided | New Event-Manager part |
+|:---:|:---:|:---:|
+| 4 / 10 | 9 | `exception` — custom exceptions + centralized `ExceptionHandler` |
+
+---
+
 ## Objective
-Build a Java application to manage student grades stored in a text file using advanced exception handling techniques.
+
+This is the **exceptions** step — the heart of this whole workshop series. You will define a family of
+**custom exceptions** and stop scattering try/catch all over the code by adding one **centralized
+`ExceptionHandler`**. In the Event Manager app this maps to `se.lexicon.exception` — a base
+`EventException` with typed subclasses (`InvalidGradeException`, `DuplicateStudentException`,
+`StudentStorageException`…), where the UI layer catches everything in one place.
 
 ## Learning Goals
-*   Implement the application based on the provided Class Diagram.
-*   Use **Unchecked Exceptions** for data validation.
-*   Create and use **Custom Checked Exceptions**.
-*   Apply **Try-with-Resources** for safe File IO.
-*   Implement a **Centralized Exception Handler**.
+
+*   Checked (`extends Exception`) vs unchecked (`extends RuntimeException`) exceptions and when each fits.
+*   A custom exception **hierarchy**: a common base type + specific subclasses.
+*   Error messages that carry useful context (the offending id/value).
+*   A single `ExceptionHandler.handle(...)` used by the controller — **no duplicate catch blocks**.
+*   Decide *where* each exception is thrown / wrapped / caught (the "35 000 m" view of the app).
 
 ---
 
-## Prerequisites & Submission
-**Task:** Setup your environment and prepare for submission.
+## Prerequisites
 
-1.  **Create Maven Project:** Create a new Maven project in your IDE.
-    *   **Group Id:** `se.lexicon`
-    *   **Artifact Id:** `student-grade-workshop`
-2.  **Version Control:** Initialize a Git repository for your project and push it to GitHub/GitLab.
-3.  **Submission:** Share the link to your repository with your instructor once you have started or completed the workshop.
+*   Maven project, **Group Id:** `se.lexicon`, **Artifact Id:** `student-grade-workshop`.
+*   You have `model`, `view`, `controller`, `data` packages from steps 1–3.
+*   Commit after each task; push this branch when complete.
 
 ---
 
-## Conceptual Model (Class Diagram)
+## Step 4 — Exception flow
 
-The following diagram shows the relationship between the different layers of the application and how exceptions flow through them using the **MVC (Model-View-Controller)** pattern.
+```mermaid
+flowchart TD
+    subgraph MODEL["model"]
+        ST["Student\nthrow InvalidGradeException if grade not in 0..100"]
+    end
 
-### Suggested Package Structure
-*   **Model:** `model`
-*   **Data:** `data`
-*   **View:** `view`
-*   **Controller:** `controller`
-*   **Exception:** `exception`
+    subgraph DATA["data"]
+        IMPL["FileStudentDAOImpl\nwrap IOException in StudentStorageException"]
+    end
+
+    subgraph CTRL["controller"]
+        CTRL["StudentController.handleChoice(...)\ntry { ... } catch (Exception e) { ExceptionHandler.handle(e, view); }"]
+    end
+
+    subgraph EXC["exception (single place to fix messages/format)"]
+        EH["ExceptionHandler\n+ handle(Exception, StudentView)\nprints user-friendly line"]
+    end
+
+    ST -->|"throws"| CTRL
+    IMPL -->|"throws"| CTRL
+    CTRL -->|"every catch calls"| EH
+    EH -->|"displayError(...)"| CTRL
+
+    style MODEL fill:#e8f5e9,stroke:#388e3c
+    style DATA fill:#e8f5e9,stroke:#388e3c
+    style CTRL fill:#f3e5f5,stroke:#7b1fa2
+    style EXC fill:#ffebee,stroke:#c62828
+```
+
+Rule of thumb for **where**:
+*   **Model**: throw specific, descriptive exceptions (validation).
+*   **DAO**: catch low-level (`IOException`) and *wrap* in your own exception.
+*   **Controller/UI**: catch the app exceptions once, centrally, and print friendly messages.
+
+---
+
+## Class Diagram
 
 ```mermaid
 classDiagram
@@ -47,92 +88,133 @@ classDiagram
         }
     }
 
-    namespace data {
-        class StudentDAO {
-            <<interface>>
-            +findAll() List~Student~
-            +save(Student student) void
-            +findByStudentId(String studentId) Student
-        }
-        class FileStudentDAOImpl {
-            -Path filePath
-        }
-    }
-
-    namespace view {
-        class StudentView {
-            +getUserInput(String prompt) String
-            +displayMenu() void
-            +displayStudents(List~Student~ students) void
-            +displayMessage(String message) void
-            +displayError(String message) void
-        }
-    }
-
-    namespace controller {
-        class StudentController {
-            -StudentDAO studentDAO
-            -StudentView studentView
-            +run() void
-        }
-    }
-
     namespace exception {
-        class StudentStorageException { }
-        class DuplicateStudentException { }
-        class InvalidGradeException { }
+        class StudentException {
+            <<base>>
+            +StudentException(String message)
+        }
+        class InvalidGradeException {
+            +InvalidGradeException(String message)
+        }
+        class DuplicateStudentException {
+            +DuplicateStudentException(String message)
+        }
+        class StudentStorageException {
+            +StudentStorageException(String message, Throwable cause)
+        }
         class ExceptionHandler {
-            +handle(Exception e)$ void
+            +handle(Exception e, StudentView view)$ void
         }
     }
 
-    StudentDAO <|.. FileStudentDAOImpl
-    StudentController --> StudentDAO : uses
-    StudentController --> StudentView : updates
-    StudentController ..> ExceptionHandler : delegates errors
-
-    StudentDAO ..> Student : manages
-    FileStudentDAOImpl ..> Student : persists
-
-    Student ..> IllegalArgumentException : throws
-    Student ..> InvalidGradeException : throws
-    FileStudentDAOImpl ..> StudentStorageException : throws
-    FileStudentDAOImpl ..> DuplicateStudentException : throws
+    StudentException <|-- InvalidGradeException
+    StudentException <|-- DuplicateStudentException
+    StudentException <|-- StudentStorageException
+    ExceptionHandler ..> StudentException : prints message
 ```
 
----
-
-## 1: The Model & Validation (Unchecked)
-**Task:** Create the `Student` class in the `model` package.
-
-*   **Validation:** for fields in the setters and use in constructor, throw `IllegalArgumentException` if the input is invalid.
-*   **Name Validation:** Name must not be blank.
-*   **Student ID Validation:** Student ID must match the pattern `^S\d{6}$` (e.g., `S123456`).
-*   **Grade Validation:** Grade must be between 0.0 and 100.0 (inclusive). Throw `InvalidGradeException` if the grade is outside this range.
-
-## 2: Custom Exceptions (Checked)
-**Task:** Define `StudentStorageException`, `DuplicateStudentException`, and `InvalidGradeException` in the `exception` package.
-
-## 3: The Data Layer (DAO)
-**Task:** Implement `StudentDAO` and `FileStudentDAOImpl` in the `data` package.
-
-*   **Responsibility:** The DAO is strictly for data persistence. It should **never** print to the console. It only communicates through return values or **Exceptions**.
-*   **File Format:** Each line in `students.txt` should be: `name,studentId,grade`
-
-## 4: The View & Controller (MVC)
-**Task:** Create the `StudentView` (in `view` package) and `StudentController` (in `controller` package).
-
-*   **The View:** Responsible for all user interaction (`Scanner` and `System.out`).
-*   **The Controller:**
-    *   Coordinates between the View and the Model.
-    *   Contains the `try-catch` loop.
-    *   Catches exceptions from the Model/DAO and tells the View what to display.
-*   **The App/Main class:** Simply initializes the components and starts the Controller.
-
-## 5: The MVC Design Pattern
-**Task:** Explain the MVC (Model-View-Controller) design pattern.
+> Suggested: make `StudentException` **checked** (extends `Exception`) so the compiler forces you to
+> handle every app error path. (In the Event Manager it is unchecked — decide yourself and justify it.)
 
 ---
 
-## Bonus Challenge
-Add a **GPA calculation** and **letter grade display** feature. Calculate the average grade across all students and display each student's letter grade (A: 90-100, B: 80-89, C: 70-79, D: 60-69, F: 0-59).
+## Test Scenarios (diagram test)
+
+```mermaid
+flowchart TD
+    A["register grade 55.5"] --> B["OK — student saved"]
+    C["register grade 115"] --> D["ExceptionHandler prints: 'Grade must be between 0 and 100'"]
+    E["register duplicate S123456"] --> F["ExceptionHandler prints: 'Student S123456 already exists'"]
+    G["corrupt a line in students.txt"] --> H["ExceptionHandler prints: 'Could not read student data'"]
+    I["any unknown error"] --> J["ExceptionHandler prints generic + stack trace for debugging"]
+```
+
+| # | Scenario | Expected result |
+|---|----------|-----------------|
+| 1 | Register valid student with grade `55.5` | Saved; `findAll` shows it |
+| 2 | Register with grade `115` | `InvalidGradeException` → friendly message, **loop continues** |
+| 3 | Register the same `studentId` twice | `DuplicateStudentException` → friendly message |
+| 4 | Enter letters where grade expected | Number-format error → friendly message (no crash) |
+| 5 | Corrupt `students.txt` (e.g. add `x,y,z`) | `StudentStorageException` → friendly message |
+| 6 | Trigger any unexpected exception | Handler shows generic message; app still returns to menu |
+
+---
+
+## Tasks
+
+### Task 1 — Model
+
+`Student` (`name` not blank, `studentId` matches `^S\d{6}$`). For the grade, do **not** throw
+`IllegalArgumentException` — throw a custom `InvalidGradeException` (grade must be `0.0 .. 100.0`).
+
+### Task 2 — The exception family
+
+In `exception` create:
+
+*   `StudentException` (base, checked) — message constructor.
+*   `InvalidGradeException extends StudentException`.
+*   `DuplicateStudentException extends StudentException`.
+*   `StudentStorageException extends StudentException` — add a `(String, Throwable)` constructor.
+
+### Task 3 — DAO uses them
+
+Reuse the step-3 pattern for `StudentDAO` / `FileStudentDAOImpl` (file `name,studentId,grade`).
+Wrap every `IOException` as `StudentStorageException`; throw `DuplicateStudentException` on duplicate id.
+**(v3.1)** In `save(...)`, *throw* `DuplicateStudentException` only if a student with that id already exists.
+
+### Task 4 — The centralized handler
+
+```java
+public final class ExceptionHandler {
+    public static void handle(Exception e, StudentView view) {
+        if (e instanceof StudentException) {
+            view.displayError(e.getMessage());
+        } else if (e instanceof NumberFormatException) {
+            view.displayError("Please enter a valid number.");
+        } else {
+            view.displayError("Unexpected error: " + e.getMessage());
+            e.printStackTrace(); // keep for debugging
+        }
+    }
+}
+```
+
+### Task 5 — Rewire the controller
+
+In `handleChoice(...)` wrap each menu action in **one** `try/catch(Exception e)`
+that calls `ExceptionHandler.handle(e, view)`. Delete every other catch block you wrote in step 2/3.
+
+### Task 6 — Explain
+
+Write 4–6 sentences: *checked vs unchecked — why is a "storage" failure a checked exception, and why is a
+"bad grade" best as either? Which choice did you make for `StudentException` and why?*
+
+---
+
+## Hints & Help (9 hints)
+
+1. Checked = the compiler forces callers to handle it → good for *recoverable, expected* failures (file problems, duplicates).
+2. Unchecked = no compile-time obligation → good for *programmer errors* and *validation of one object* (bad argument).
+3. Use `super(message)` in every custom exception constructor — the message must survive up the hierarchy.
+4. A `(String, Throwable)` constructor chains the cause: `super(message, cause);` keeps the original stack trace.
+5. Catch order matters: catch `StudentException` before `Exception` in `handle(...)` (more specific first).
+6. `instanceof` in the handler is the simple version — an *enum or method override* per exception is the advanced one.
+7. To make a file "corrupt" for testing, add a line that doesn't split into exactly 3 parts and watch `findAll()` fail gracefully.
+8. The controller should have **one** `try` per menu action, not try/catch nests — the handler is the single exit.
+9. Don't `printStackTrace()` for *expected* business errors; reserve it for `else` (unknown) branch.
+
+---
+
+## Checklist
+
+- [ ] `Student` throws `InvalidGradeException` (not `IllegalArgumentException`)
+- [ ] Exception family: base + 3 subclasses with proper constructors
+- [ ] DAO wraps `IOException` and throws duplicates as app exceptions
+- [ ] `ExceptionHandler` is the **only** place that decides error text
+- [ ] Controller has one catch per action → handler
+- [ ] All 6 test scenarios pass
+
+## Bonus Challenge (optional)
+
+Make `ExceptionHandler` return a message *object* instead of printing, and move printing to the view:
+`ExceptionHandler.handle(e)` → returns `AppMessage` → `view.show(message)`. Compare that to the direct-print version: which is easier to unit-test?
