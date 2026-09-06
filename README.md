@@ -42,10 +42,29 @@ classDiagram
 
 ## Checklist
 
-- [ ] Task 1: Create the `Book` class in the `model` package (private fields + getters)
-- [ ] Task 2: Validate title/author (not blank) and ISBN (`^\d{13}$`) → `IllegalArgumentException`
-- [ ] Task 3: `available` defaults to `true`; readable `toString()`
-- [ ] Task 4: Explain why unchecked exceptions suit model validation
+- [x] Task 1: Create the `Book` class in the `model` package (private fields + getters)
+- [x] Task 2: Validate title/author (not blank) and ISBN (`^\d{13}$`) → `IllegalArgumentException`
+- [x] Task 3: `available` defaults to `true`; readable `toString()`
+- [x] Task 4: Explain why unchecked exceptions suit model validation
+
+## Progress notes (finished parts)
+
+All worksheet tasks are done on this branch:
+
+- `Book.java` — private fields, validating constructors, read-only title/author/isbn,
+  `isSameBook()` + `isValidIsbn()` (bonus).
+- `Main.java` — demonstrates the 5 test scenarios: default availability, borrowed book,
+  invalid ISBN rejected, blank title rejected, same-book check.
+- `data/` — `BookDAO` interface + file-based `BookDAOImpl` with lazy-loading and duplicate checks.
+- `exception/` + `view/` + `controller/` — skeletons prepared for Steps 2–4, with notes in each file explaining their future role.
+
+> Why unchecked exceptions for model validation? A bad field value is an
+> **input/programming error** (someone passed `""` or a 3-digit ISBN), not a
+> recoverable runtime condition — so it should crash loudly and immediately.
+> `IllegalArgumentException` is unchecked: the caller is not forced to catch it,
+> which keeps small model classes free of heavy try/catch boilerplate.
+> Checked exceptions are reserved for conditions the caller *is* expected to
+> handle (Step 4: file/database failures).
 
 ## Running
 

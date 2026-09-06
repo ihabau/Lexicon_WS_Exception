@@ -166,14 +166,16 @@ Write 3–5 sentences in your own words: *why* did we use `IllegalArgumentExcept
 
 ## Checklist
 
-- [ ] `Book` exists in `se.lexicon.model` with `private` fields + getters
-- [ ] Validation throws `IllegalArgumentException` for blank title/author
-- [ ] ISBN validated with regex `^\d{13}$`
-- [ ] `available` defaults to `true`; 4-arg constructor allows setting it
-- [ ] `toString()` is readable
-- [ ] All 5 test scenarios pass
+- [x] `Book` exists in `se.lexicon.model` with `private` fields + getters
+- [x] Validation throws `IllegalArgumentException` for blank title/author
+- [x] ISBN validated with regex `^\d{13}$`
+- [x] `available` defaults to `true`; 4-arg constructor allows setting it
+- [x] `toString()` is readable
+- [x] All 5 test scenarios pass
 
 ## Bonus Challenge (optional)
 
 Add a `boolean isSameBook(Book other)` method that compares by ISBN, and a
 `static boolean isValidIsbn(String isbn)` utility method — you will reuse it in later steps.
+
+> Status: **done** on this branch — see `Book.java` (`isSameBook`, `isValidIsbn`).

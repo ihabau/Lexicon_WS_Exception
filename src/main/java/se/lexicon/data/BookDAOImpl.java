@@ -7,112 +7,116 @@ import se.lexicon.model.Book;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.file.*;
-
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
+/**
+ * File-based implementation of {@link BookDAO} (Step 1 scaffolding — full DAO
+ * handling is covered in Step 3 of the series).
+ *
+ * Responsibilities:
+ * - keep an in-memory copy of the library (lazy-loaded from {@code dir/library.txt})
+ * - persist new books by appending to the file
+ * - protect against duplicate ISBNs / titles
+ *
+ * NOTE: exceptions here extend RuntimeException for now; Step 4 turns them into a
+ * proper checked hierarchy handled by a central ExceptionHandler.
+ */
 public class BookDAOImpl implements BookDAO {
 
     private final List<Book> library = new ArrayList<>();
+    private static final Path STORAGE = Paths.get("dir/library.txt");
 
     @Override
     public List<Book> findAll() throws BookStorageException {
-
-        if (library.isEmpty()){
-            try {
-                bufferLibraryData();
-            } catch (BookStorageException e) {
-                throw new BookStorageException( "Loading from file failed." );
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
+        loadIfEmpty(); // first call reads the file into the in-memory list
         return library;
     }
 
     @Override
     public void save(Book book) throws DuplicateBookException {
+        loadIfEmpty();
 
-        if (library.isEmpty()){
-            try {
-                bufferLibraryData();
-            } catch (BookStorageException e) {
-                throw new BookStorageException( "Loading from file failed." );
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        library.forEach(book1 -> {
-            if ( book1.getIsbn().equals(book.getIsbn())) {
+        // Reject duplicates BEFORE writing anything to disk.
+        for (Book existing : library) {
+            if (existing.getIsbn().equals(book.getIsbn())) {
                 throw new DuplicateBookException("Book ISBN duplicate found.");
             }
-            if ( book1.getTitle().equals(book.getTitle())) {
+            if (existing.getTitle().equals(book.getTitle())) {
                 throw new DuplicateBookException("Book title duplicate found.");
             }
-        });
-
-        Path path = Path.of("dir/library.txt");
-
-        try(BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-            writer.append(book.getTitle());
-            writer.append(",");
-            writer.append(book.getAuthor());
-            writer.append(",");
-            writer.append(book.getIsbn());
-            writer.append(",");
-            writer.append( String.valueOf(book.isAvailable()));
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
 
+        // Append one book per line: title,author,isbn,available
+        try (BufferedWriter writer = Files.newBufferedWriter(STORAGE,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
+            writer.write(book.getTitle());
+            writer.write(",");
+            writer.write(book.getAuthor());
+            writer.write(",");
+            writer.write(book.getIsbn());
+            writer.write(",");
+            writer.write(String.valueOf(book.isAvailable()));
+            writer.newLine(); // without this every book lands on the same line
+        } catch (IOException e) {
+            throw new BookStorageException("Saving book to file failed.", e);
+        }
+
+        library.add(book); // keep the in-memory list in sync with the file
     }
 
     @Override
     public Book findByTitle(String name) throws BookAvailableException {
+        loadIfEmpty();
         return library.stream()
                 .filter(book -> book.getTitle().contentEquals(name))
-                .findFirst().orElse(null);
+                .findFirst()
+                .orElse(null);
     }
 
-    private void bufferLibraryData () throws BookStorageException, IOException {
-
-        Path path = Paths.get("dir/library.txt");
-        Path pathParent = path.getParent();
-
-        if ( !Files.exists(pathParent)) {
-            try {
-                Files.createDirectories(pathParent);
-            } catch (BookStorageException e) {
-                throw new BookStorageException("Creating directory failed.");
-            }
+    /**
+     * Lazy-loads the file into {@link #library} on the first call.
+     * Creates {@code dir/library.txt} (including the parent directory) if missing.
+     */
+    private void loadIfEmpty() {
+        if (!library.isEmpty()) {
+            return; // already loaded
         }
-        if ( !Files.exists(path)) {
-            try {
-                Files.createFile(path);
-            } catch (BookStorageException e) {
-                throw new BookStorageException("Creating file failed.");
+        ensureFileExists();
+        readFile();
+    }
+
+    // -- file helpers --
+
+    private void ensureFileExists() {
+        Path parent = STORAGE.getParent();
+        try {
+            if (parent != null && !Files.exists(parent)) {
+                Files.createDirectories(parent);
             }
-        }
-
-        if (library.isEmpty()) {
-            try ( Stream<String> lines = Files.lines(path)) {
-
-                lines.forEach( line -> {
-                    String[] bookData = line.split(",");
-                    Book book = new Book( bookData[0], bookData[1], bookData[2], Boolean.parseBoolean(bookData[3]) );
-                    library.add(book);
-                });
-
-            } catch (IOException e) {
-                throw new IOException("Failed to read file.", e);
+            if (!Files.exists(STORAGE)) {
+                Files.createFile(STORAGE);
             }
+        } catch (IOException e) {
+            throw new BookStorageException("Could not create storage file.", e);
         }
+    }
 
+    private void readFile() {
+        try (Stream<String> lines = Files.lines(STORAGE)) {
+            lines.forEach(line -> {
+                if (line.isBlank()) return; // skip empty lines
+                String[] data = line.split(",");
+                Book book = new Book(data[0], data[1], data[2], Boolean.parseBoolean(data[3]));
+                library.add(book);
+            });
+        } catch (IOException e) {
+            throw new BookStorageException("Reading library file failed.", e);
+        }
     }
 }
